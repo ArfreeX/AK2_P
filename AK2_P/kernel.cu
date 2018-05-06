@@ -41,7 +41,13 @@ int main()
 	
 	int size_bytes = rows * rows * 4;		// number of bytes allocated on device mem
 
-	// cudaMalloc((void**)&d_matrix, sizeBytes); 
+	cudaMalloc(&d_matrix, size_bytes); 
+	cudaMemcpy(d_matrix, matrix, size_bytes, cudaMemcpyHostToDevice);
+
+	cudaFree(d_matrix);
+	for (int i = 0; i < rows; i++)
+		delete [] matrix[i];
+	delete[] matrix;
 
 	system("PAUSE");
 	return 0;
