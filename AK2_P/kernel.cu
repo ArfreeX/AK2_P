@@ -43,6 +43,12 @@ int main()
 
 	cudaMalloc(&d_matrix, size_bytes); 
 	cudaMemcpy(d_matrix, matrix, size_bytes, cudaMemcpyHostToDevice);
+	
+	// todo
+
+	cudaMemcpy(matrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
+
+	showMatrix(matrix, rows);				// results
 
 	cudaFree(d_matrix);
 	for (int i = 0; i < rows; i++)
