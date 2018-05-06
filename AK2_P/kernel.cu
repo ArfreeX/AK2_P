@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <iostream>
 
-// _global_ void ... -> device
+//_global_ void ... -> device
  
 
 
@@ -34,8 +34,11 @@ void showMatrix(int **matrix, int rows)
 }
 int main()
 {
-	int **matrix = 0, **d_matrix = 0, rows; // todo: delete []
+	CMeasure time;
+	long long int time_table[3];
 
+	int **matrix = 0, **d_matrix = 0, rows; // todo: delete []
+	
 	matrix = readFromFile(rows);
 	showMatrix(matrix, rows);
 	
@@ -43,8 +46,10 @@ int main()
 
 	cudaMalloc(&d_matrix, size_bytes); 
 	cudaMemcpy(d_matrix, matrix, size_bytes, cudaMemcpyHostToDevice);
-	
+
+	time.start();
 	// todo
+	time_table[0] = time.elapsed();
 
 	cudaMemcpy(matrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
 
