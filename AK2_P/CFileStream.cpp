@@ -20,7 +20,7 @@ void CFileStream::openFile()
 	} while (fileRead.good() != true && filename != "exit");
 }
 
-int** CFileStream::readData(int** array,int & rows)
+int* CFileStream::readData(int* array, int & rows)
 {
 	int val;
 	int size;
@@ -32,26 +32,19 @@ int** CFileStream::readData(int** array,int & rows)
 		else
 			if (rows > 0)
 			{
-				size = rows * rows;									// total size of array
-				array = new int* [rows];
-				for (int i = 0; i < rows; i++)
-				{
-					array[i] = new int[rows];
-				}
+				size = rows * rows;
+				array = new int[size];
 
-				for (int i = 0; i < rows; i++)
+				for (int i = 0; i < size; i++)
 				{
-					for (int j = 0; j < rows; j++)
+					fileRead >> val;
+					if (fileRead.fail())
 					{
-						fileRead >> val;
-						if (fileRead.fail())
-						{
-							std::cout << "File error - READ DATA" << std::endl;
-							break;
-						}
-						else
-							array[i][j] = val;
+						std::cout << "File error - READ DATA" << std::endl;
+						break;
 					}
+					else
+						array[i] = val;
 				}
 				return array;
 				fileRead.close();
@@ -68,9 +61,9 @@ int** CFileStream::readData(int** array,int & rows)
 
 }
 
-void CFileStream::write(int* array, int size) 
+void CFileStream::write(int* array, int size)
 {
-	std::cin >> filename; 
+	std::cin >> filename;
 	fileWrite.open(filename, std::ios::out | std::ios::app);
 	for (int i = 0; i < size; i++)
 	{

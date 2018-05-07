@@ -9,27 +9,28 @@
  
 
 
-int** readFromFile(int &rows)
+int* readFromFile(int &rows)
 {
 	CFileStream file;
-	int **matrix = 0;
+	int *matrix = 0;
 	std::cout << "Insert file path\n";
 	file.openFile();
 	matrix = file.readData(matrix, rows);
 	return matrix;
 }
 
-void showMatrix(int **matrix, int rows)
+void showMatrix(int *matrix, int rows)
 {
 	if (rows > 0)
 	{
 		for (int i = 0; i < rows; i++)
 		{
 			for (int j = 0; j < rows; j++)
-				std::cout << matrix[i][j] << " ";
+			{
+				std::cout << matrix[i*rows+j] << " ";
+			}
 			std::cout << std::endl;
 		}
-		
 	}
 }
 int main()
@@ -37,7 +38,7 @@ int main()
 	CMeasure time;
 	long long int time_table[3];
 
-	int **matrix = 0, **d_matrix = 0, rows; // todo: delete []
+	int *matrix = 0, *d_matrix = 0, rows; // todo: delete []
 	
 	matrix = readFromFile(rows);
 	showMatrix(matrix, rows);
@@ -56,8 +57,6 @@ int main()
 	showMatrix(matrix, rows);				// results
 
 	cudaFree(d_matrix);
-	for (int i = 0; i < rows; i++)
-		delete [] matrix[i];
 	delete[] matrix;
 
 	system("PAUSE");
