@@ -8,7 +8,7 @@ class CFileStream
 public:
 	~CFileStream();
 	void openFile();
-	int* readData(int* array, int & size);
+	double* readData(double* array, int & size);
 	void write(int* array, int size);
 	
 

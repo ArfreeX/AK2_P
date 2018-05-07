@@ -20,7 +20,7 @@ void CFileStream::openFile()
 	} while (fileRead.good() != true && filename != "exit");
 }
 
-int* CFileStream::readData(int* array, int & rows)
+double* CFileStream::readData(double* array, int & rows)
 {
 	int val;
 	int size;
@@ -33,7 +33,7 @@ int* CFileStream::readData(int* array, int & rows)
 			if (rows > 0)
 			{
 				size = rows * rows;
-				array = new int[size];
+				array = new double[size];
 
 				for (int i = 0; i < size; i++)
 				{
