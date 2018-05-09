@@ -22,7 +22,7 @@ void CFileStream::openFile()
 
 double* CFileStream::readData(double* array, int & rows)
 {
-	int val;
+	double val;
 	int size;
 	if (fileRead.is_open())
 	{
@@ -33,7 +33,7 @@ double* CFileStream::readData(double* array, int & rows)
 			if (rows > 0)
 			{
 				size = rows * rows;
-				array = new double[size];
+				array = new double[size*2];
 
 				for (int i = 0; i < size; i++)
 				{
