@@ -10,11 +10,12 @@
 #include <cublas_v2.h>
 
 //_global_ void ... -> device
+#define minvalue 0.000005
 
 double* readFromFile(int &rows);
 void showMatrix(double *matrix, int rows);
 void showFullMatrix(double *matrix, int rows);
-
+double* stickMatrix(double* matrix, double* ident_matrix, int rows);
 
 double* gaussJordan(double *matrix, int rows)
 {
@@ -30,7 +31,7 @@ double* gaussJordan(double *matrix, int rows)
 
 	ident_matrix = new double[rows*rows];
 
-	for (int i = 0; i < rows; i++)
+	for (int i = 0; i < rows; i++) {
 		for (int j = 0; j < rows; j++)
 		{
 			if (j == i)
@@ -38,49 +39,57 @@ double* gaussJordan(double *matrix, int rows)
 			else
 				ident_matrix[i*rows + j] = 0;
 		}
+	}
 
-	for (j = 0; j<rows; j++) {
+	double *augmentedmatrix = stickMatrix(matrix, ident_matrix, rows);
+	int temp;
+	for (int j = 0; j<rows; j++) {
 		temp = j;
 
 		/* finding maximum jth column element in last (rows-j) rows */
 
-		for (i = j + 1; i<rows; i++)
-			if (augmentedmatrix[i][j]>augmentedmatrix[temp][j])
+		for (int i = j + 1; i < rows; i++) {
+			if (augmentedmatrix[i*rows * 2 + j] > augmentedmatrix[temp*rows * 2 + j])
 				temp = i;
-
-		if (fabs(augmentedmatrix[temp][j])<minvalue) {
-			printf("\n Elements are too small to deal with !!!");
+		}
+		
+		if (fabs(augmentedmatrix[temp*rows*2 + j])<minvalue) {
+			printf("\n Elements are too small to deal with !!!\n");
 			break;
 		}
 
 		
 
 		/* swapping row which has maximum jth column element */
-
-		if (temp != j)
-			for (k = 0; k<2 * rows; k++) {
-				temporary = augmentedmatrix[j][k];
-				augmentedmatrix[j][k] = augmentedmatrix[temp][k];
-				augmentedmatrix[temp][k] = temporary;
+		//KERNEL?
+		double temporary;
+		if (temp != j) {
+			for (int k = 0; k < 2 * rows; k++) {
+				temporary = augmentedmatrix[j*rows * 2 + k];
+				augmentedmatrix[j*rows * 2 + k] = augmentedmatrix[temp*rows * 2 + k];
+				augmentedmatrix[temp*rows * 2 + k] = temporary;
 			}
-
+		}
 		/* performing row operations to form required identity matrix out of the input matrix */
-
-		for (i = 0; i<rows; i++)
+		//KERNEL?
+		double r;
+		for (int i = 0; i < rows; i++) {
 			if (i != j) {
-				r = augmentedmatrix[i][j];
-				for (k = 0; k<2 * rows; k++)
-					augmentedmatrix[i][k] -= (augmentedmatrix[j][k] / augmentedmatrix[j][j])*r;
+				r = augmentedmatrix[i*rows * 2 + j];
+				for (int k = 0; k < 2 * rows; k++)
+					augmentedmatrix[i*rows * 2 + k] -= (augmentedmatrix[j*rows * 2 + k] / augmentedmatrix[j*rows * 2 + j])*r;
 			}
 			else {
-				r = augmentedmatrix[i][j];
-				for (k = 0; k<2 * rows; k++)
-					augmentedmatrix[i][k] /= r;
+				r = augmentedmatrix[i*rows * 2 + j];
+				for (int k = 0; k < 2 * rows; k++)
+					augmentedmatrix[i*rows * 2 + k] /= r;
 			}
-
+		}
 	}
 
-	cudaFree(d_matrix);
+	//cudaFree(d_matrix);
+
+	return augmentedmatrix;
 }
 
 double* stickMatrix(double* matrix, double* ident_matrix, int rows)
@@ -106,10 +115,12 @@ int main()
 	double * matrix;
 	CMeasure time;
 	long long int time_table[3];
-	int rows;
+	int rows = 3;
 
 	matrix = readFromFile(rows);
-
+	showMatrix(matrix, rows);
+	std::cout << "\n\n";
+	showFullMatrix(gaussJordan(matrix, rows), rows);
 	system("PAUSE");
 	return 0;
 }
