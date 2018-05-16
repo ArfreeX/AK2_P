@@ -9,8 +9,6 @@
 #include <cuda_runtime_api.h>
 #include <cublas_v2.h>
 
-int x = 0;
-
 __global__ void swap(double* matrix, int rows, int temp,int j)
 {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -22,41 +20,27 @@ __global__ void swap(double* matrix, int rows, int temp,int j)
 		matrix[temp*rows * 2 + x] = temporary;
 
 	}
-	 
-	x++;
 }
 
-//{
-//	double r;
-//	for (int i = 0; i < rows; i++) {
-//		if (i != j) {
-//			r = augmentedmatrix[i*rows * 2 + j];
-//			for (int k = 0; k < 2 * rows; k++)
-//				augmentedmatrix[i*rows * 2 + k] -= (augmentedmatrix[j*rows * 2 + k] / augmentedmatrix[j*rows * 2 + j])*r;
-//		}
-//		else {
-//			r = augmentedmatrix[i*rows * 2 + j];
-//			for (int k = 0; k < 2 * rows; k++)
-//				augmentedmatrix[i*rows * 2 + k] /= r;
-//		}
-//	}
-//}
-//__global__ void gjAlgorithm(double* matrix, )
-//{
-//	for (int k = 0; k < 2 * rows; k++)
-//		augmentedmatrix[i*rows * 2 + k] -= (augmentedmatrix[j*rows * 2 + k] / augmentedmatrix[j*rows * 2 + j])*r;
-//
-//}
-//
-//__global__ void gjAlgorithm2(double* matrix, )
-//{
-//	r = augmentedmatrix[i*rows * 2 + j];
-//	for (int k = 0; k < 2 * rows; k++)
-//		augmentedmatrix[i*rows * 2 + k] /= r;
-//}
+__global__ void gjAlgorithm(double* matrix, int rows, double temp, int i,int j)
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	
+	if (x < rows * 2)
+		matrix[i*rows * 2 + x] -= (matrix[j*rows * 2 + x] / matrix[j*rows * 2 + j])*temp;
+
+}
+
+__global__ void gjAlgorithm2(double* matrix, int rows, double temp, int i, int j )
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < rows * 2)
+		matrix[i*rows * 2 + x] /= temp;
+}
 
 #define minvalue 0.000005
-#define blocksize 8
+#define blocksize 10 // need to be checked for proper values
 
 double* readFromFile(int &rows);
 void showMatrix(double *matrix, int rows);
@@ -65,18 +49,17 @@ double* stickMatrix(double* matrix, double* ident_matrix, int rows);
 
 double* gaussJordan(double *matrix, int rows)
 {
+	int temp;
 	double *d_matrix = 0;
 	double *ident_matrix = 0;
 	int size_bytes = rows * rows * 2 * sizeof(matrix);		// number of bytes allocated on device mem
-	dim3 threadsPerBlock(size_bytes, size_bytes);
-	dim3 numBlocks((rows + size_bytes - 1) / size_bytes, (rows + size_bytes - 1) / size_bytes);
-
+	dim3 threadsPerBlock(blocksize, blocksize);
+	dim3 numBlocks((rows + blocksize - 1) / blocksize, (rows + blocksize - 1) / blocksize);
 
 	auto err = cudaMalloc(&d_matrix, size_bytes);
 	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
 	ident_matrix = new double[rows*rows];
-
 	for (int i = 0; i < rows; i++) {
 		for (int j = 0; j < rows; j++)
 		{
@@ -89,10 +72,11 @@ double* gaussJordan(double *matrix, int rows)
 
 	double *augmentedmatrix = stickMatrix(matrix, ident_matrix, rows);
 
-	err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
-	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
-	int temp;
+//=================================================================================================================================================
+//															Obliczanie rownolegle - petla GJ
+//=================================================================================================================================================
+
 	for (int j = 0; j<rows; j++) {
 		temp = j;
 
@@ -107,36 +91,53 @@ double* gaussJordan(double *matrix, int rows)
 			break;
 		}
 
-		
-
 		/* swapping row which has maximum jth column element */
 		//KERNEL?
 		double temporary;
-		if (temp != j) {
-			swap <<< numBlocks, threadsPerBlock >>> (d_matrix,rows,temp,j);
-			std::cout << x;
+		if (temp != j)
+		{
+			err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
+			if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+			swap << < numBlocks, threadsPerBlock >> > (d_matrix, rows, temp, j);
 
 			err = cudaMemcpy(augmentedmatrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
 			if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
-			/*for (int k = 0; k < 2 * rows; k++) {
-				temporary = augmentedmatrix[j*rows * 2 + k];
-				augmentedmatrix[j*rows * 2 + k] = augmentedmatrix[temp*rows * 2 + k];
-				augmentedmatrix[temp*rows * 2 + k] = temporary;
-			}*/
+			
 		}
+	
+		
 		/* performing row operations to form required identity matrix out of the input matrix */
 		//KERNEL?
 		double r;
 		for (int i = 0; i < rows; i++) {
-			if (i != j) {
-				r = augmentedmatrix[i*rows * 2 + j];
-				for (int k = 0; k < 2 * rows; k++)
-					augmentedmatrix[i*rows * 2 + k] -= (augmentedmatrix[j*rows * 2 + k] / augmentedmatrix[j*rows * 2 + j])*r;
+			r = augmentedmatrix[i*rows * 2 + j];
+			if (i != j)
+			{
+				err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+				gjAlgorithm << < numBlocks, threadsPerBlock >> > (d_matrix, rows, r, i, j);
+
+				err = cudaMemcpy(augmentedmatrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+				
+				/*for (int k = 0; k < 2 * rows; k++)
+					augmentedmatrix[i*rows * 2 + k] -= (augmentedmatrix[j*rows * 2 + k] / augmentedmatrix[j*rows * 2 + j])*r;*/
 			}
-			else {
-				r = augmentedmatrix[i*rows * 2 + j];
-				for (int k = 0; k < 2 * rows; k++)
-					augmentedmatrix[i*rows * 2 + k] /= r;
+				
+			else
+			{
+				err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+				
+				gjAlgorithm2 << < numBlocks, threadsPerBlock >> > (d_matrix, rows, r, i, j);
+
+				err = cudaMemcpy(augmentedmatrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+				/*for (int k = 0; k < 2 * rows; k++)
+				augmentedmatrix[i*rows * 2 + k] /= r;*/
 			}
 		}
 	}
@@ -169,7 +170,7 @@ int main()
 	double * matrix;
 	CMeasure time;
 	long long int time_table[3];
-	int rows = 3;
+	int rows = 0;
 
 	matrix = readFromFile(rows);
 	showMatrix(matrix, rows);
