@@ -11,6 +11,7 @@ void CFileStream::openFile()
 	do
 	{
 		std::cin >> filename;
+
 		fileRead.open(filename, std::ios::in);
 
 		if (fileRead.good() == true)
@@ -61,11 +62,12 @@ double* CFileStream::readData(double* array, int & rows)
 
 }
 
-void CFileStream::write(int* array, int size)
+void CFileStream::write(double* array, int size)
 {
-	std::cin >> filename;
-	fileWrite.open(filename, std::ios::out | std::ios::app);
-	for (int i = 0; i < size; i++)
+	//std::cin >> filename;
+	fileWrite.open(filename, std::ios::out);
+	fileWrite << size << std::endl;
+	for (int i = 0; i < size*size; i++)
 	{
 		fileWrite << array[i] << std::endl;
 	}
