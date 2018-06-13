@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-
-#include <stdio.h>
 #include <iostream>
 #include <fstream>
 #include <cuda.h>
@@ -11,8 +9,11 @@
 #include <cublas_v2.h>
 
 #define MIN_ELEMENT 0.000005
-#define BLOCK_SIZE 512 // needs to be checked for proper values
+#define BLOCK_SIZE 512
 #define MAX_ELEMENT 15
+
+double* stickMatrix(double* matrix, double* ident_matrix, int rows);
+
 
 __global__ void swap(double* matrix, int rows, int temp,int j)
 {
@@ -62,22 +63,18 @@ void randomMatrixToFile(int rows)
 	delete[] matrix;
 }
 
-double* readFromFile(int &rows);
-void showMatrix(double *matrix, int rows);
-void showFullMatrix(double *matrix, int rows);
-double* stickMatrix(double* matrix, double* ident_matrix, int rows);
-
-double* gaussJordan(double *matrix, int rows)
+double* gaussJordanWithCUDA(double *matrix, int rows)
 {
 	int temp;
 	double *d_matrix = 0;
 	double *ident_matrix = 0;
-	int size_bytes = rows * rows * 2 * sizeof(double);		// number of bytes allocated on device mem
+	int size_bytes = rows * rows * 2 * sizeof(double);
 	dim3 threadsPerBlock(BLOCK_SIZE);
 	dim3 numBlocks((2*rows + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
 	auto err = cudaMalloc(&d_matrix, size_bytes);
-	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) 
+		<< " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
 	ident_matrix = new double[rows*rows];
 	for (int i = 0; i < rows; i++) 
@@ -102,35 +99,31 @@ double* gaussJordan(double *matrix, int rows)
 	{
 		temp = j;
 
-		/* finding maximum jth column element in last (rows-j) rows */
-		for (int i = j + 1; i < rows; i++) {
+		for (int i = j + 1; i < rows; i++) 
+		{
 			if (augmentedmatrix[i*rows * 2 + j] > augmentedmatrix[temp*rows * 2 + j])
 				temp = i;
 		}
 		
-		if (fabs(augmentedmatrix[temp*rows*2 + j])<MIN_ELEMENT) {
-			printf("\n Elements are too small to deal with !!!\n");
+		if (fabs(augmentedmatrix[temp*rows*2 + j])<MIN_ELEMENT) 
+		{
+			std::cout << "Too small elements!\n";
 			break;
 		}
 
-		/* swapping row which has maximum jth column element */
-		//KERNEL?
-		double temporary;
 		if (temp != j)
 		{
 			err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
-			if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+			if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) 
+				<< " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
 			swap << < numBlocks, threadsPerBlock >> > (d_matrix, rows, temp, j);
 
 			err = cudaMemcpy(augmentedmatrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
-			if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
-			
+			if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) 
+				<< " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 		}
 	
-		
-		/* performing row operations to form required identity matrix out of the input matrix */
-		//KERNEL?
 		double r;
 		for (int i = 0; i < rows; i++)
 		{
@@ -138,7 +131,8 @@ double* gaussJordan(double *matrix, int rows)
 			if (i != j)
 			{
 				err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
-				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) 
+					<< " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
 				gjAlgorithm << < numBlocks, threadsPerBlock >> > (d_matrix, rows, r, i, j);
 
@@ -150,17 +144,89 @@ double* gaussJordan(double *matrix, int rows)
 			else
 			{
 				err = cudaMemcpy(d_matrix, augmentedmatrix, size_bytes, cudaMemcpyHostToDevice);
-				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) 
+					<< " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 				
 				gjAlgorithm2 << < numBlocks, threadsPerBlock >> > (d_matrix, rows, r, i, j);
 
 				err = cudaMemcpy(augmentedmatrix, d_matrix, size_bytes, cudaMemcpyDeviceToHost);
-				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+				if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) 
+					<< " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 			}
 		}
 	}
 
 	cudaFree(d_matrix);
+
+	return augmentedmatrix;
+}
+
+// INVERTING MATRIX WITHOUT CUDA
+double* gaussJordan(double *matrix, int rows)
+{
+	int temp;
+	double *d_matrix = 0;
+	double *ident_matrix = 0;
+
+
+	ident_matrix = new double[rows*rows];
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < rows; j++)
+		{
+			if (j == i)
+				ident_matrix[i*rows + j] = 1;
+			else
+				ident_matrix[i*rows + j] = 0;
+		}
+	}
+
+	double *augmentedmatrix = stickMatrix(matrix, ident_matrix, rows);
+
+	double temporary;
+	for (int j = 0; j<rows; j++)
+	{
+		temp = j;
+
+		for (int i = j + 1; i < rows; i++)
+		{
+			if (augmentedmatrix[i*rows * 2 + j] > augmentedmatrix[temp*rows * 2 + j])
+				temp = i;
+		}
+
+		if (fabs(augmentedmatrix[temp*rows * 2 + j])<MIN_ELEMENT)
+		{
+			std::cout << "Too small elements!\n";
+			break;
+		}
+
+		if (temp != j)
+		{
+			for (int k = 0; k<2 * rows; k++) 
+			{
+				temporary = augmentedmatrix[2*j*rows + k];
+				augmentedmatrix[2 * j*rows + k] = augmentedmatrix[2*temp*rows + k];
+				augmentedmatrix[2*temp*rows + k] = temporary;
+			}
+		}
+
+		double r;
+		for (int i = 0; i < rows; i++)
+		{
+			r = augmentedmatrix[i*rows * 2 + j];
+			if (i != j)
+			{
+				for (int k = 0; k<2 * rows; k++)
+					augmentedmatrix[2*i*rows + k] -= (augmentedmatrix[2 * j*rows + k] / augmentedmatrix[2 * j*rows + j])*r;
+			}
+
+			else
+			{
+				for (int k = 0; k<2 * rows; k++)
+					augmentedmatrix[2 * i*rows + k] /= r;
+			}
+		}
+	}
 
 	return augmentedmatrix;
 }
@@ -183,24 +249,7 @@ double* stickMatrix(double* matrix, double* ident_matrix, int rows)
 	return aug_matrix;
 }
 
-int main()
-{
-	double * matrix;
-	CMeasure time;
-	long long int time_table[3];
-	int rows = 500;
-	randomMatrixToFile(rows);
-	matrix = readFromFile(rows);
-	//showMatrix(matrix, rows);
-	std::cout << "\n\n";
-	showFullMatrix(gaussJordan(matrix, rows), rows);
-	std::cout << "\n\n\n";
-	return 0;
-}
-
-
-
-//==========================================================================
+//=========================================================================
 //==========================================================================
 
 double* readFromFile(int &rows)
@@ -209,7 +258,7 @@ double* readFromFile(int &rows)
 	double *matrix = 0;
 	std::cout << "Insert file path\n";
 	file.openFile();
-	matrix = file.readData(matrix, rows);		// !!! size * 2 in allocation
+	matrix = file.readData(matrix, rows);
 	return matrix;
 }
 
@@ -234,37 +283,26 @@ void showFullMatrix(double *matrix, int rows)
 	{
 		for (int i = 0; i < rows; i++)
 		{
-			for (int j = 0; j < 2*rows; j++)
+			for (int j = 0; j < 2 * rows; j++)
 			{
-				std::cout << matrix[i*2*rows + j] << " ";
+				std::cout << matrix[i * 2 * rows + j] << " ";
 			}
 			std::cout << std::endl;
 		}
 	}
 }
 
+int main()
+{
+	double * matrix;
+	int rows = 20;
+	randomMatrixToFile(rows);
+	matrix = readFromFile(rows);
+	showMatrix(matrix, rows);
+	std::cout << "\n\n";
+	showFullMatrix(gaussJordan(matrix, rows), rows);
+	std::cout << "\n\n\n";
+	return 0;
+}
 
-//class CMatrix
-//{
-//	CMatrix(int size) : size(size)
-//	{
-//		matrix = new double[size];
-//	}
-//	~CMatrix()
-//	{
-//		delete[] matrix;
-//	}
-//
-//	CMatrix operator+(const CMatrix &augmented)
-//	{
-//		CMatrix augmentedMatrix(size * 2);
-//		// sssssssss
-//	}
-//
-//	double *matrix;
-//
-//private:
-//
-//	int size;
-//
-//};
+
